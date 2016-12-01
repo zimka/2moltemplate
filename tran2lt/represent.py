@@ -1,30 +1,18 @@
-from MDAnalysis import Universe
-from MDAnalysis.topology.core import guess_angles, guess_dihedrals
-import MDAnalysis.core.topologyobjects as top
+from .generic import LTGeneric
+from .utils import NonUniqueTypesError, MOL2Reader
 
 
-class NonUniqueTypesError(ValueError):
-    pass
+class LTRepresent(LTGeneric):
 
-
-class LAMMPSData:
-    def __init__(self, filename, name="YourNameHere"):
+    def __init__(self, atoms, bonds, name="YourNameHere", ancestor_name=None, imports=None):
         self.name = name
-        u = Universe(filename)
+        self.ancestor_name = ancestor_name
+        self.atoms = atoms
+        self.bonds = bonds
+        self.imports = imports
+        self._build_derivatives()
 
-        self.atoms = u.atoms
-        self.bonds = u.bonds
-        angles_ind = guess_angles(self.bonds)
-        self.angles = top.TopologyGroup.from_indices(set(angles_ind), self.atoms,
-                                                     bondclass=top.Angle, guessed=True)
-
-        dihedrals_ind = guess_dihedrals(self.angles)
-        self.dihedrals = top.TopologyGroup.from_indices(set(dihedrals_ind), self.atoms,
-                                                        bondclass=top.Dihedral, guessed=True)
-
-        self.build_derivatives()
-
-    def build_derivatives(self):
+    def _build_derivatives(self):
         """
         These values should be calculated after init
         :return:
@@ -45,14 +33,10 @@ class LAMMPSData:
 
         self.atoms_types = sorted(list(set(self.atoms.types)))
         self.bonds_types = _get_types(self.bonds.types())
-        self.angles_types = _get_types(self.angles.types())
-        self.dihedrals_types = _get_types(self.dihedrals.types())
 
         default_types_map = lambda x: dict((k, k) for k in x)
         self.atoms_types_map = default_types_map(self.atoms_types)
         self.bonds_types_map = default_types_map(self.bonds_types)
-        self.angles_types_map = default_types_map(self.angles_types)
-        self.dihedrals_types_map = default_types_map(self.dihedrals_types)
 
     @property
     def atom_names(self):
@@ -128,13 +112,6 @@ class LAMMPSData:
         for t in self.atoms_types:
             descr.write(template.format(t, self.atoms_types_map[t]))
 
-    def _write_header(self, descr):
-        try:
-            descr.write(self.header +"\n")
-        except AttributeError:
-            pass
-        descr.write(self.name + "{\n")
-
     def write_moltemplate(self, filename):
         with open(filename, "w") as out:
             self._write_header(out)
@@ -143,8 +120,8 @@ class LAMMPSData:
             self._write_bonds(out)
             out.write("}\n")
 
-    def set_header(self, header):
-        self.header = header
+    def set_imports(self, imports):
+        self.imports = imports
 
     def set_name(self, name):
         self.name = name
@@ -163,46 +140,40 @@ class LAMMPSData:
         for grouptype in mappings:
             _set_one_mapping(grouptype)
 
-    def replace_atoms_bonded_with_X(self):
-        pass
-atom_mapping = {
-    # C.2
-    # C.3
-    # C.ar
-    # H :
-    # O.2
-    # O.3
-    # S.O2
-    #"C.2": 88,  # 47    CM    "Alkene H2-C="                 6    12.011    3
-    #"C.2": 86,#   47    CM    "Alkene R2-C="                 6    12.011    3
-    "C.2": 3,#    3    C     "Acetic Acid -COOH (UA)"       6    12.011    3
-    "C.3": 81,  # 13    CT    "Alkane -CH2-"                 6    12.011    4
-    "H": 85,  # 46    HC    "Alkane H-C"                   1     1.008    1
 
-    "C.ar": 90,  # 48    CA    "Aromatic C"                   6    12.011    3
-    "H.ar": 91,  # 49    HA    "Aromatic H-C"                 1     1.008    1
 
-    "O.2": 223,  # 4    O     "Ketone C=O"                   8    15.999    1
-    "O.3": 122,  # 20    OS    "Dialkyl Ether -O-"            8    15.999    2
+if __name__ == "__main__":
+    atom_mapping = {
+        #"C.2": 88,  # 47    CM    "Alkene H2-C="                 6    12.011    3
+        #"C.2": 86,#   47    CM    "Alkene R2-C="                 6    12.011    3
+        "C.2": 3,#    3    C     "Acetic Acid -COOH (UA)"       6    12.011    3
+        "C.3": 81,  # 13    CT    "Alkane -CH2-"                 6    12.011    4
+        "H": 85,  # 46    HC    "Alkane H-C"                   1     1.008    1
 
-    "O.3H": 96,#    5    OH    "Alcohol -OH"                  8    15.999    2
-    "HO.3": 97, #   7    HO    "Alcohol -OH"                  1     1.008    1
+        "C.ar": 90,  # 48    CA    "Aromatic C"                   6    12.011    3
+        "H.ar": 91,  # 49    HA    "Aromatic H-C"                 1     1.008    1
 
-    "S.O2": 434,  # 79    SY    "Sulfone R-SO2-R"             16    32.060    4
-    "O.2S": 435,#   23    OY    "Sulfone R-SO2-R"              8    15.999    1
+        "O.2": 223,  # 4    O     "Ketone C=O"                   8    15.999    1
+        "O.3": 122,  # 20    OS    "Dialkyl Ether -O-"            8    15.999    2
 
-}
+        "O.3H": 96,#    5    OH    "Alcohol -OH"                  8    15.999    2
+        "HO.3": 97, #   7    HO    "Alcohol -OH"                  1     1.008    1
 
-mapping = {"atoms":atom_mapping}
+        "S.O2": 434,  # 79    SY    "Sulfone R-SO2-R"             16    32.060    4
+        "O.2S": 435,#   23    OY    "Sulfone R-SO2-R"              8    15.999    1
 
-data = LAMMPSData("../aligned_H.mol2")
-data.set_mappings(mappings=mapping)
-data.set_name("Wedge inherits OPLSAA")
-data.set_header('import "oplsaa.lt"    # <-- defines the "OPLSAA" force field\n')
-data.write_moltemplate("../../moltemplate_files/wedge.lt")
-a = data.atoms[65]
-b = a.bonds.to_indices()[0]
-#print(a.type, a.position, data.atoms[b[0]].type, data.atoms[b[1]].type)
-#print(data.atoms[67])
-print(data.atoms_types)
-#print(data.atoms.types)
+    }
+
+    mapping = {"atoms":atom_mapping}
+    mol2 = MOL2Reader("../aligned_H.mol2")
+    lt = LTRepresent(mol2.atoms, mol2.bonds)
+    lt.set_mappings(mappings=mapping)
+    lt.set_name("Wedge inherits OPLSAA")
+    lt.set_imports('import "oplsaa.lt"    # <-- defines the "OPLSAA" force field\n')
+    lt.write_moltemplate("../../wedge_test.lt")
+    a = lt.atoms[65]
+    b = a.bonds.to_indices()[0]
+    #print(a.type, a.position, data.atoms[b[0]].type, data.atoms[b[1]].type)
+    #print(data.atoms[67])
+    print(lt.atoms_types)
+    #print(data.atoms.types)
