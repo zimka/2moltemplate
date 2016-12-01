@@ -1,7 +1,7 @@
-from tran2lt import MOL2Reader, LTRepresent
+from tran2lt import MOL2Reader, LTRepresent, LTManipulate
+import numpy as np
 
-
-if __name__ == "__main__":
+def represent_test():
     atom_mapping = {
         #"C.2": 88,  # 47    CM    "Alkene H2-C="                 6    12.011    3
         #"C.2": 86,#   47    CM    "Alkene R2-C="                 6    12.011    3
@@ -28,11 +28,29 @@ if __name__ == "__main__":
     lt = LTRepresent(mol2.atoms, mol2.bonds)
     lt.set_mappings(mappings=mapping)
     lt.set_name("Wedge inherits OPLSAA")
-    lt.set_imports('import "oplsaa.lt"    # <-- defines the "OPLSAA" force field\n')
-    lt.write_moltemplate("../wedge_test.lt")
+    lt.set_imports('import "oplsaa.lt"    # <-- defines the "OPLSAA" force field')
+    lt.write_lt("../wedge_test.lt")
     a = lt.atoms[65]
     b = a.bonds.to_indices()[0]
     #print(a.type, a.position, data.atoms[b[0]].type, data.atoms[b[1]].type)
     #print(data.atoms[67])
     print(lt.atoms_types)
     #print(data.atoms.types)
+
+
+def manipulate_test():
+    np.random.seed()
+    size = 12
+
+    points = (np.random.rand(size,3)-0.5)*2*5
+    axis = np.random.rand(size,3)
+    axis /= np.linalg.norm(axis, 1)
+
+    angles = np.random.rand(size)*2*np.pi
+    lt = LTManipulate(name="Water", points=points, axis=axis, angles=angles)
+    lt.set_variable("water")
+    lt.set_imports('import "spc.lt"')
+
+    lt.write_lt("../../water_system.lt")
+if __name__ == "__main__":
+    manipulate_test()
